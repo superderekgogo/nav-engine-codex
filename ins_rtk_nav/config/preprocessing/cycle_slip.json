@@ -1,0 +1,12 @@
+{
+  "cycle_slip_preprocessing": {
+    "method": "l1_doppler_and_dual_frequency_geometry_free",
+    "maximum_epoch_gap_seconds": 1.5,
+    "doppler_phase_threshold_cycles": 0.5,
+    "integer_cycle_tolerance_cycles": 0.25,
+    "geometry_free_threshold_m": 0.05,
+    "l1_wavelength_m": 0.190293672798,
+    "l2_wavelength_m": 0.244210213425,
+    "minimum_common_satellites": 4
+  }
+}

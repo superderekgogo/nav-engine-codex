@@ -1,0 +1,10 @@
+{
+  "gnss": {
+    "epoch_tolerance_seconds": 0.000001,
+    "missing_value": 0,
+    "delimiter": "whitespace",
+    "use_p2": false,
+    "satellite_state_source": "base_record",
+    "missing_satellite_policy": "ignore"
+  }
+}

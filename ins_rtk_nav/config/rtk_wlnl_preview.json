@@ -1,0 +1,14 @@
+{
+  "include": ["td_ddcp_preview.json", "navigation/rtk_solution.json"],
+  "paths": {
+    "output": "../build/rtk_wlnl_preview"
+  },
+  "rtk_solution": {
+    "ambiguity_resolution": {
+      "mode": "wide_lane_narrow_lane"
+    },
+    "observation_mapping": {
+      "use_p2_for_dual_frequency_rtk": true
+    }
+  }
+}

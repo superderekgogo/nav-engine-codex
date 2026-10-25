@@ -1,0 +1,6 @@
+{
+  "include": ["system.json"],
+  "paths": {
+    "output": "../build/td_ddcp_preview"
+  }
+}

@@ -1,0 +1,12 @@
+/data1/
+/eigen/
+/RTKLIB-master/
+/regression_analysis_tool/
+/ins_rtk_nav/build/
+/ins_rtk_nav/build_ltc_modes/
+/output/*.csv
+/output/LTC_TD_DDCP_Fusion_Performance_Report.md
+/output/ltc_td_ddcp_performance.png
+
+**/__pycache__/
+*.pyc

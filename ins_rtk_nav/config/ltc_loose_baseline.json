@@ -1,0 +1,5 @@
+{
+  "include": ["system.json"],
+  "paths": {"output": "../build/ltc_loose_baseline"},
+  "fusion_model": {"ltc_fusion": {"td_ddcp_enabled": false}}
+}

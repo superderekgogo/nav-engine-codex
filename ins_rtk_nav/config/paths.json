@@ -1,0 +1,10 @@
+{
+  "paths": {
+    "imu": "../../data1/imu/IMU_100Hz.txt",
+    "rover_gnss": "../../data1/GNSS/rover/rover.txt",
+    "base_gnss": "../../data1/GNSS/base/base.txt",
+    "rover_coordinates": "../../data1/GNSS/rover/coordinates.txt",
+    "base_coordinates": "../../data1/GNSS/base/coordinates.txt",
+    "output": "../../output"
+  }
+}

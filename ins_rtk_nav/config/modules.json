@@ -1,0 +1,83 @@
+{
+  "modules": [
+    {
+      "id": "runtime_status",
+      "type": "status_source",
+      "publish_topic": "system.events",
+      "detail": "Configuration loaded; typed module bus is active."
+    },
+    {
+      "id": "console_output",
+      "type": "console_sink",
+      "subscribe_topic": "system.events"
+    },
+    {
+      "id": "dataset_summary",
+      "type": "dataset_summary_sink",
+      "subscribe_topic": "dataset.summary"
+    },
+    {
+      "id": "ins_navigator",
+      "type": "ins_navigator",
+      "imu_topic": "sensor.imu",
+      "solution_topic": "navigation.ins"
+    },
+    {
+      "id": "navigation_csv",
+      "type": "navigation_csv_sink",
+      "subscribe_topic": "navigation.ins",
+      "file_name": "ins_solution.csv"
+    },
+    {
+      "id": "gnss_cycle_slip_preprocessor",
+      "type": "gnss_cycle_slip_preprocessor",
+      "subscribe_topic": "sensor.gnss.paired",
+      "publish_topic": "sensor.gnss.prepared"
+    },
+    {
+      "id": "td_ddcp_builder",
+      "type": "td_ddcp_builder",
+      "subscribe_topic": "sensor.gnss.prepared",
+      "publish_topic": "measurement.td_ddcp",
+      "summary_topic": "measurement.td_ddcp.summary"
+    },
+    {
+      "id": "td_ddcp_csv",
+      "type": "td_ddcp_csv_sink",
+      "subscribe_topic": "measurement.td_ddcp",
+      "summary_topic": "measurement.td_ddcp.summary",
+      "file_name": "td_ddcp_measurements.csv"
+    },
+    {
+      "id": "rtk_solution",
+      "type": "rtk_solution",
+      "subscribe_topic": "sensor.gnss.prepared",
+      "publish_topic": "navigation.rtk"
+    },
+    {
+      "id": "ltc_fusion",
+      "type": "ltc_fusion",
+      "output_topic": "navigation.ltc",
+      "file_name": "ltc_solution.csv"
+    },
+    {
+      "id": "ltc_csv",
+      "type": "navigation_csv_sink",
+      "subscribe_topic": "navigation.ltc",
+      "file_name": "ltc_solution.csv"
+    },
+    {
+      "id": "rtk_csv",
+      "type": "rtk_csv_sink",
+      "subscribe_topic": "navigation.rtk",
+      "file_name": "rtk_solution.csv"
+    },
+    {
+      "id": "dataset_replay",
+      "type": "dataset_replay",
+      "imu_topic": "sensor.imu",
+      "gnss_topic": "sensor.gnss.paired",
+      "summary_topic": "dataset.summary"
+    }
+  ]
+}

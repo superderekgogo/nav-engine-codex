@@ -1,0 +1,9 @@
+{
+  "include": ["system.json"],
+  "paths": {"output": "../build/mode_lc"},
+  "fusion_model": {
+    "combination_mode": "lc",
+    "measurement_models": ["rtk_position_velocity_loose_v1"],
+    "ltc_fusion": {"rtk_position_enabled": true, "rtk_velocity_enabled": true, "td_ddcp_enabled": false}
+  }
+}

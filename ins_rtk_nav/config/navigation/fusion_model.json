@@ -1,0 +1,47 @@
+{
+  "fusion_model": {
+    "combination_mode": "ltc",
+    "state_model": "ins_error_15d_v1",
+    "process_model": "strapdown_ins_error_v1",
+    "measurement_models": [
+      "rtk_position_loose_v1",
+      "l1_tdcp_delta_position_velocity_v1"
+    ],
+    "ltc_fusion": {
+      "enabled": true,
+      "imu_topic": "sensor.imu",
+      "rtk_topic": "navigation.rtk",
+      "td_ddcp_topic": "measurement.td_ddcp",
+      "td_ddcp_enabled": true,
+      "rtk_position_enabled": true,
+      "rtk_velocity_enabled": false,
+      "output_topic": "navigation.ltc",
+      "innovations_file": "ltc_innovations.csv",
+      "initial_position_std_m": [10.0, 10.0, 10.0],
+      "initial_velocity_std_mps": [5.0, 5.0, 5.0],
+      "initial_attitude_std_deg": [10.0, 10.0, 30.0],
+      "initial_gyro_bias_std_radps": [0.01, 0.01, 0.01],
+      "initial_accel_bias_std_mps2": [0.1, 0.1, 0.1],
+      "gyro_noise_density_radps_sqrt_hz": 0.003,
+      "accel_noise_density_mps2_sqrt_hz": 0.05,
+      "gyro_bias_random_walk_radps_sqrt_s": 0.0001,
+      "accel_bias_random_walk_mps2_sqrt_s": 0.001,
+      "minimum_measurement_variance": 0.0004,
+      "float_measurement_variance_scale": 1.0,
+      "fix_measurement_variance_scale": 1.0,
+      "td_ddcp_variance_scale": 1.0,
+      "accept_float": true,
+      "accept_fix": true
+    },
+    "td_ddcp": {
+      "max_epoch_gap_seconds": 1.5,
+      "minimum_common_satellites": 2,
+      "wavelength_l1_m": 0.190293672798,
+      "wavelength_l2_m": 0.244210213425,
+      "phase_sigma_cycles_per_receiver": 0.01,
+      "doppler_phase_rate_sign": -1.0,
+      "cycle_slip_threshold_cycles": 0.5,
+      "cycle_slip_screening": "doppler_phase_consistency"
+    }
+  }
+}

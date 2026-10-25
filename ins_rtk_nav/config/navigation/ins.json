@@ -1,0 +1,8 @@
+{
+  "ins": {
+    "initial_velocity_ned_mps": [0.0, 0.0, 0.0],
+    "initial_attitude_rpy_deg": [0.0, 0.0, 0.0],
+    "initial_gyro_bias_radps": [0.0, 0.0, 0.0],
+    "initial_accel_bias_mps2": [0.0, 0.0, 0.0]
+  }
+}

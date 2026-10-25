@@ -1,0 +1,36 @@
+{
+  "rtk_solution": {
+    "engine": "rtklib_adapter",
+    "mode": "kinematic_relative",
+    "constellation_mapping": "GPS_PRN",
+    "base_position_source": "paths.base_coordinates",
+    "base_position_frame": "ECEF",
+    "base_position_unit": "m",
+    "observation_mapping": {
+      "pseudorange": "C1_m",
+      "use_p2_for_dual_frequency_rtk": true,
+      "carrier_l1": "L1_cycles",
+      "carrier_l2": "L2_cycles",
+      "doppler_l1": "D1_Hz",
+      "satellite_state_source": "base_record"
+    },
+    "solution_acceptance": {
+      "accept_fix": true,
+      "accept_float": true,
+      "minimum_satellites": 5
+    },
+    "ambiguity_resolution": {
+      "frequency_count": 2,
+      "mode": "continuous",
+      "ratio_threshold": 3.0,
+      "minimum_lock_count": 10,
+      "minimum_fix_count": 10
+    },
+    "covariance": {
+      "float_scale": 1.0,
+      "fix_scale": 1.0,
+      "maximum_position_variance_m2": 100.0,
+      "maximum_velocity_variance_m2ps2": 25.0
+    }
+  }
+}
