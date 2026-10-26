@@ -3,7 +3,6 @@
   "paths": {"output": "../build/mode_tc"},
   "fusion_model": {
     "combination_mode": "tc",
-    "measurement_models": ["td_ddcp_tight_v1"],
-    "ltc_fusion": {"rtk_position_enabled": false, "rtk_velocity_enabled": false, "td_ddcp_enabled": true}
+    "measurement_models": ["td_ddcp_tight_v1"]
   }
 }

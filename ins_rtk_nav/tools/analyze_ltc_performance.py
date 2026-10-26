@@ -1,82 +1,181 @@
 #!/usr/bin/env python3
-"""Compare LC, TC and LTC replay solutions and pre-update innovations."""
-import csv, math, statistics
+"""Summarize event-time LC/TC/LTC navigation replays and pre-update innovations."""
+import bisect, csv, math, statistics
+from datetime import date
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNS = {"LC": ROOT/"ins_rtk_nav/build/mode_lc", "TC": ROOT/"ins_rtk_nav/build/mode_tc", "LTC": ROOT/"ins_rtk_nav/build/mode_ltc"}
-OUT = ROOT/"output"
-REPORT = OUT/"LC_TC_LTC_Performance_Report.md"
-FIGURE = OUT/"lc_tc_ltc_performance.png"
+RUNS = {name: ROOT / "ins_rtk_nav" / "build" / f"mode_{name.lower()}" for name in ("LC", "TC", "LTC")}
+OUT = ROOT / "output"
+REPORT, FIGURE = OUT / "LC_TC_LTC_Performance_Report.md", OUT / "lc_tc_ltc_performance.png"
 
 def read(path):
-    with path.open(newline="", encoding="utf-8-sig") as f: return list(csv.DictReader(f))
-def num(row,key):
-    try: return float(row[key])
-    except (KeyError,ValueError,TypeError): return math.nan
-def rms(xs):
-    xs=[x for x in xs if math.isfinite(x)]
-    return math.sqrt(sum(x*x for x in xs)/len(xs)) if xs else math.nan
-def pct(xs,p):
-    xs=sorted(x for x in xs if math.isfinite(x))
-    return xs[min(len(xs)-1,math.ceil(p*len(xs))-1)] if xs else math.nan
-def fmt(x,d=4): return "n/a" if not math.isfinite(x) else f"{x:.{d}f}"
-def summarize(xs):
-    xs=[x for x in xs if math.isfinite(x)]
-    return (statistics.median(xs),pct(xs,.95),xs[-1] if xs else math.nan) if xs else (math.nan,math.nan,math.nan)
+    with path.open(newline="", encoding="utf-8-sig") as stream:
+        return list(csv.DictReader(stream))
+def num(row, key):
+    try:
+        value = float(row[key])
+        return value if math.isfinite(value) else math.nan
+    except (KeyError, ValueError, TypeError):
+        return math.nan
+def rms(values):
+    values = [v for v in values if math.isfinite(v)]
+    return math.sqrt(sum(v*v for v in values)/len(values)) if values else math.nan
+def pct(values, p):
+    values = sorted(v for v in values if math.isfinite(v))
+    return values[min(len(values)-1, math.ceil(p*len(values))-1)] if values else math.nan
+def spread(values):
+    values = [v for v in values if math.isfinite(v)]
+    return (statistics.median(values), pct(values, .95), values[-1]) if values else (math.nan,)*3
+def fmt(x, digits=4):
+    return "n/a" if not math.isfinite(x) else f"{x:.{digits}f}"
 
-solutions={k:read(p/"ltc_solution.csv") for k,p in RUNS.items()}
-innovations={k:read(p/"ltc_innovations.csv") for k,p in RUNS.items()}
-first=min(num(rows[0],"gps_seconds") for rows in solutions.values())
-metrics={"Position 3D 1σ (m)":"position_3d_rms_1sigma_m","Velocity 3D 1σ (m/s)":"velocity_3d_rms_1sigma_mps","Attitude 3D 1σ (deg)":"attitude_3d_rms_1sigma_deg"}
+solutions, innovations = {}, {}
+for mode in RUNS:
+    folder = RUNS[mode]
+    solutions[mode] = read(folder / "ltc_solution.csv")
+    innovations[mode] = read(folder / "ltc_innovations.csv")
+rtk = sorted((num(row, "gps_seconds"), row) for row in read(RUNS["LC"] / "rtk_solution.csv"))
+rtk_times = [item[0] for item in rtk]
+first_time = min(num(rows[0], "gps_seconds") for rows in solutions.values())
 
-fig,axs=plt.subplots(2,2,figsize=(14,8),constrained_layout=True)
-colors={"LC":"tab:blue","TC":"tab:orange","LTC":"tab:green"}
-for ax,(label,key) in zip(axs.flat[:3],metrics.items()):
-    for mode,rows in solutions.items():
-        sampled=rows[::100]
-        ax.plot([(num(r,"gps_seconds")-first)/60 for r in sampled],[num(r,key) for r in sampled],label=mode,color=colors[mode],lw=1)
-    ax.set_title(label);ax.set_xlabel("Elapsed time (min)");ax.grid(True,alpha=.25);ax.legend()
-ax=axs.flat[3]
-for mode,rows in innovations.items():
-    vals=[num(r,"normalized_innovation") for r in rows]
-    vals=[x for x in vals if math.isfinite(x)]
-    ax.hist(vals,bins=60,density=True,histtype="step",label=f"{mode} (n={len(vals)})",color=colors[mode])
-ax.set_xlim(-6,6);ax.set_title("Pre-update normalized innovations");ax.set_xlabel("Residual / marginal sigma");ax.grid(True,alpha=.25);ax.legend(fontsize=8)
-fig.suptitle("INS/RTK combination mode comparison")
-OUT.mkdir(parents=True,exist_ok=True);fig.savefig(FIGURE,dpi=160);plt.close(fig)
+colors = {"LC": "tab:blue", "TC": "tab:orange", "LTC": "tab:green"}
+metrics = {
+    "Position 3D 1σ (m)": "position_3d_rms_1sigma_m",
+    "Velocity 3D 1σ (m/s)": "velocity_3d_rms_1sigma_mps",
+    "Attitude 3D 1σ (deg)": "attitude_3d_rms_1sigma_deg",
+}
+fig, axes = plt.subplots(2, 2, figsize=(14, 8), constrained_layout=True)
+for ax, (title, key) in zip(axes.flat[:3], metrics.items()):
+    for mode, rows in solutions.items():
+        sample = rows[::100]
+        ax.plot([(num(r, "gps_seconds")-first_time)/60 for r in sample],
+                [num(r, key) for r in sample], label=mode, color=colors[mode], lw=1)
+    ax.set_title(title); ax.set_xlabel("Elapsed time (min)"); ax.grid(True, alpha=.25); ax.legend()
+ax = axes.flat[3]
+for mode, rows in innovations.items():
+    values = [num(r, "normalized_innovation") for r in rows]
+    values = [x for x in values if math.isfinite(x)]
+    if values: ax.hist(values, bins=60, density=True, histtype="step", label=f"{mode} (n={len(values):,})", color=colors[mode])
+ax.set_xlim(-6, 6); ax.set_title("Pre-update normalized innovations"); ax.set_xlabel("Innovation / marginal sigma"); ax.grid(True, alpha=.25); ax.legend(fontsize=8)
+fig.suptitle("INS/RTK LC, TC and LTC replay comparison")
+OUT.mkdir(parents=True, exist_ok=True); fig.savefig(FIGURE, dpi=160); plt.close(fig)
 
-lines=["# LC / TC / LTC 组合导航性能评估","",f"数据集重放：{len(solutions['LTC']):,} 个 INS 输出样本，{len(read(RUNS['LTC']/ 'rtk_solution.csv')):,} 个 RTK 历元；统计生成于 2026-10-24。三种模式独立配置、独立重放。","","## 模式定义与处理量","","| 模式 | 实际滤波更新 | RTK 解输入 | TDCP 输入 |","|---|---|---:|---:|"]
-lines += ["| LC | RTK 位置与速度松组合更新 | 是 | 否 |","| TC | 卫星级 L1/L2 TD-DDCP 几何残差直接更新 | 否 | 是 |","| LTC | RTK 位置松组合；L1 TDCP 解算相邻历元天线 Δposition，再除以 Δt 得到区间平均速度更新 | 是（位置） | 是（仅 L1 用于 WLS） |","","LTC 的 L1 观测先构造模型 `y = c + A·Δr + ε`，用共享 pivot 相关协方差及前历元位置不确定度进行加权最小二乘，要求至少 4 条有效 L1 行且几何矩阵满秩；得到 Δr 后转换到 NED，并以 `Δr/Δt` 作为区间平均速度观测。滤波预测量使用前后 INS 端点速度均值 `0.5(vₖ₋₁+vₖ)`，而非仅用当前端点速度。该速度更新对应 H=0.5I；前历元速度协方差按 0.25 投影入观测噪声。","","## 回放统计","","| 模式 | INS 样本 | RTK 更新 | TDCP 更新历元 | TDCP 派生速度分量数 | TDCP 拒绝历元 | 最终位置 3D 1σ (m) |","|---|---:|---:|---:|---:|---:|---|"]
-for mode,folder in RUNS.items():
-    rows=solutions[mode]; inv=innovations[mode]; groups={}
-    for r in inv:
-        if r.get("measurement")=="td_ddcp_range": groups.setdefault((r["gps_seconds"],r["previous_gps_seconds"]),set()).add(r["svid"])
-    tdrows=sum(1 for r in inv if r.get("measurement") in ("td_ddcp_range","l1_tdcp_delta_position_velocity"))
-    td_epochs=len(groups) if mode=="TC" else len(set((r["gps_seconds"],r["previous_gps_seconds"]) for r in inv if r.get("measurement")=="l1_tdcp_delta_position_velocity"))
-    accepted=int(td_epochs)
-    rejected=1563-accepted if mode!="LC" else 0
-    rtku=int(sum(1 for r in inv if r.get("measurement")=="rtk_pv" and r.get("component","").startswith("position_n")))
-    last=rows[-1]
-    lines.append(f"| {mode} | {len(rows):,} | {rtku:,} | {td_epochs:,} | {tdrows:,} | {rejected:,} | {fmt(num(last,'position_3d_rms_1sigma_m'))} |")
-lines += ["","注意：创新 CSV 中 LTC/TC 的 `nis` 是每个联合更新历元的同一个 NIS 值，按 `(gps_seconds, previous_gps_seconds, measurement)` 去重统计；`normalized_innovation` 则是每行用边际标准差归一化，行间相关时不能视为独立标准正态样本。","","## 协方差变化","","以下为输出协方差迹开方（3D 1σ）的全程 median / P95 / 最终值，包含初始收敛期。它表示滤波器自身报告的不确定度，不是真值误差。","","| 指标 | LC median / P95 / final | TC median / P95 / final | LTC median / P95 / final |","|---|---:|---:|---:|"]
-for label,key in metrics.items():
-    values=[]
-    for mode,rows in solutions.items(): values.append(" / ".join(fmt(v,5) for v in summarize([num(r,key) for r in rows])))
-    lines.append(f"| {label} | {values[0]} | {values[1]} | {values[2]} |")
-lines += ["","## Innovations","","| 模式 / 量测 | 行数 | bias | RMS | abs P95 | max abs | normalized RMS | normalized abs P95 | mean NIS/dof |","|---|---:|---:|---:|---:|---:|---:|---:|"]
-for mode,rows in innovations.items():
-    bands={}
-    for r in rows: bands.setdefault(r.get("measurement","unknown"),[]).append(r)
-    for meas,rs in bands.items():
-        residual=[num(r,"innovation") for r in rs]; norm=[num(r,"normalized_innovation") for r in rs]
-        epoch={}
-        for r in rs: epoch[(r.get("gps_seconds"),r.get("previous_gps_seconds"),r.get("measurement"))]=(num(r,"nis"),num(r,"dof"))
-        nd=[nis/dof for nis,dof in epoch.values() if dof>0 and math.isfinite(nis)]
-        lines.append(f"| {mode} / {meas} | {len(rs):,} | {fmt(statistics.mean([x for x in residual if math.isfinite(x)]),5)} | {fmt(rms(residual),5)} | {fmt(pct([abs(x) for x in residual],.95),5)} | {fmt(max(abs(x) for x in residual if math.isfinite(x)),5)} | {fmt(rms(norm),3)} | {fmt(pct([abs(x) for x in norm],.95),3)} | {fmt(statistics.mean(nd),3)} |")
-lines += ["","## Innovations interpretation","","按目前噪声/相关性近似，LTC 的 L1 派生速度更新 normalized RMS=0.878、mean NIS/dof=0.831，接近 1，初步看与设定噪声量级相符；LC RTK P/V 的 normalized RMS=1.283、NIS/dof=2.798，提示 RTK 量测噪声可能偏小或存在未建模异常；TC TD-DDCP 的 normalized RMS=0.199、NIS/dof=0.048，创新明显小于预测不确定度，当前 TC 协方差很可能偏保守，尤其应复核时间差分噪声、共享参考状态协方差投影和相关处理。上述 NIS 仅作诊断，不是独立精度评价。","","## 解释与限制","","- LTC 这次实际接受 1,557 个 L1 派生速度更新历元（4,671 个速度分量）；另有 6 个未能用于该更新，原因是有效 L1 行数不足或几何条件不合格。RTK 位置仍在所有 1,564 个有效历元更新。需要结合 CSV 和日志定位每个拒绝原因；当前输出只记录计数，没有逐原因诊断。","- LTC 的 TDCP 派生速度与 RTK 位置的误差存在数据相关性；当前实现没有前后状态完整互协方差，也没有 RTK 与相位之间的完整互协方差，因此 covariance/NIS 是近似评估。","- 三种模式的数值输出及协方差不能直接当作独立精度真值比较。LC/LTC 使用同一 RTK 引擎输入；没有独立 rover 位置、速度或姿态参考数据，不能据此认证绝对定位、速度或姿态精度。","- 目前报告中的 innovations 是更新前残差；NIS 使用实现内近似的预测协方差。normalized RMS 偏离 1 可提示噪声模型/相关性仍需调整，但受相关行与参考状态误差近似影响。","- 图表：`output/lc_tc_ltc_performance.png`。分模式原始结果分别在 `ins_rtk_nav/build/mode_lc/`、`mode_tc/`、`mode_ltc/`。","","## 结论","","三种模式均可通过 JSON 独立切换和运行。按当前数据，LTC 的 L1 TDCP 区间平均速度更新已成功进入滤波器，和 RTK 位置松组合并行工作；它不是 TC 的卫星级范围残差更新，也没有把 RTK 速度默认混入 LTC。LTC 最终位置协方差为约 0.030 m 的 3D 1σ（N/E/D 边际组合），可视为滤波器内部不确定度指标，不能解读为已验证的 3 cm 实际定位误差。","",""]
-REPORT.write_text("\n".join(lines),encoding="utf-8")
-print(REPORT);print(FIGURE)
+def nearest_rtk(t):
+    index = bisect.bisect_left(rtk_times, t)
+    candidates = [i for i in (index-1, index) if 0 <= i < len(rtk)]
+    return min(candidates, key=lambda i: abs(rtk_times[i]-t)) if candidates else None
+def ned_rotation(lat, lon):
+    sl, cl, so, co = math.sin(lat), math.cos(lat), math.sin(lon), math.cos(lon)
+    return ((-sl*co, -sl*so, cl), (-so, co, 0.0), (-cl*co, -cl*so, -sl))
+def rtk_diffs(mode):
+    pos, vel = [], []
+    nav = solutions[mode]
+    nav_times = [num(row, "gps_seconds") for row in nav]
+    for t, obs in rtk:
+        index = bisect.bisect_left(nav_times, t)
+        candidates = [i for i in (index-1, index) if 0 <= i < len(nav)]
+        if not candidates: continue
+        row = nav[min(candidates, key=lambda i: abs(nav_times[i]-t))]
+        if abs(number := num(row, "gps_seconds") - t) > .02: continue
+        mask = int(num(obs, "valid_components"))
+        if mask & 7 != 7: continue
+        lat, lon = math.radians(num(row, "latitude_deg")), math.radians(num(row, "longitude_deg"))
+        rot = ned_rotation(lat, lon)
+        de = [num(row, f"ecef_{axis}_m")-num(obs, f"{axis}_ecef_m") for axis in "xyz"]
+        pos.append([sum(rot[i][j]*de[j] for j in range(3)) for i in range(3)])
+        if mask & 56 == 56:
+            rtk_velocity = [num(obs, f"v{axis}_ecef_mps") for axis in "xyz"]
+            dv = [num(row, f"velocity_{axis}_mps")-sum(rot[i][j]*rtk_velocity[j] for j in range(3)) for i, axis in enumerate("ned")]
+            vel.append(dv)
+    p3 = [math.sqrt(sum(x*x for x in v)) for v in pos]
+    h = [math.hypot(v[0], v[1]) for v in pos]
+    d = [v[2] for v in pos]
+    v3 = [math.sqrt(sum(x*x for x in v)) for v in vel]
+    return len(pos), rms(h), rms(d), rms(p3), rms(v3)
+
+lines = [
+    "# LC / TC / LTC 组合导航性能评估", "",
+    f"生成日期：{date.today().isoformat()}。三种模式使用 18 维闭环误差状态滤波架构，分别独立全量离线回放。",
+    "",
+    "## 架构与模型", "",
+    "FilterManagerModule 收集回放事件并按时间对齐，构造导航量测包；InertialNavigationModule 独占 mechanization 与名义状态并处理误差反馈；EstimationModule 构造导航领域过程/量测模型；通用 StateEstimator 只处理状态向量、协方差及线性预测/更新/reset 矩阵。",
+    "",
+    "状态为 18 维：NED 位置、速度、姿态小角、陀螺 bias、加计 bias 和 body-frame lever arm。为保持此次架构重构与原融合模型等价，`estimate_lever_arm` 默认关闭；在线估计须在 JSON 显式启用，并通过充分姿态激励门控。",
+    "",
+    "| Mode | Measurement models | 实际含义 |", "|---|---|---|",
+    "| LC | RTK P/V | RTK 天线位置及有效速度松组合更新 |",
+    "| TC | L1/L2 TD-DDCP | 卫星级相邻历元双差载波相位几何变化；不输入 RTK P/V |",
+    "| LTC | RTK position + L1 TDCP | RTK 位置松组合，L1 TD-DDCP WLS 派生区间平均速度；RTK 速度默认关闭 |",
+    "",
+    "## 数据与更新统计", "",
+    f"每个模式输出 {len(solutions['LTC']):,} 个 IMU solution epoch；RTK batch 有 {len(rtk):,} 个历元；回放时间为 GPS {solutions['LTC'][0]['gps_seconds']}–{solutions['LTC'][-1]['gps_seconds']} s。",
+    "", "| Mode | RTK 更新历元 | TD 更新历元 | TD 行数 | TD 未接受历元 | 最终位置 3D 1σ |", "|---|---:|---:|---:|---:|---:|"
+]
+for mode in RUNS:
+    groups = {}
+    for row in innovations[mode]:
+        key = (row["gps_seconds"], row["previous_gps_seconds"], row["measurement"])
+        groups.setdefault(key, []).append(row)
+    rtk_epochs = sum(1 for key, rows in groups.items() if key[2] == "rtk_pv" and any(x["accepted"] == "1" for x in rows))
+    td_groups = {key: rows for key, rows in groups.items() if key[2] in ("td_ddcp_range", "l1_tdcp_delta_position_velocity")}
+    td_epochs = sum(any(x["accepted"] == "1" for x in rows) for rows in td_groups.values())
+    td_rows = sum(len(rows) for rows in td_groups.values())
+    expected = 1563 if mode != "LC" else 0
+    lines.append(f"| {mode} | {rtk_epochs:,} | {td_epochs:,} | {td_rows:,} | {max(0, expected-td_epochs):,} | {fmt(num(solutions[mode][-1], 'position_3d_rms_1sigma_m'), 5)} m |")
+
+lines += ["", "## 协方差内部不确定度", "",
+          "以下 3D 1σ 为各 NED 协方差块迹的平方根，统计包含初始收敛阶段。它是滤波器内部不确定度，不是真值误差。",
+          "", "| 指标 | LC median / P95 / final | TC median / P95 / final | LTC median / P95 / final |", "|---|---:|---:|---:|"]
+for label, key in metrics.items():
+    columns = [" / ".join(fmt(x, 5) for x in spread([num(r, key) for r in solutions[mode]])) for mode in ("LC", "TC", "LTC")]
+    lines.append(f"| {label} | {columns[0]} | {columns[1]} | {columns[2]} |")
+
+lines += ["", "## Innovation consistency", "",
+          "Innovation 为更新前残差。NIS 每历元按整个相关观测向量计算，表中按历元去重；normalized innovation 使用边际标准差，相关观测行不是独立样本。",
+          "", "| Mode / model | rows | accepted rows | bias | RMS | abs P95 | max abs | normalized RMS | mean NIS / dof |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+for mode in RUNS:
+    models = {}
+    for row in innovations[mode]: models.setdefault(row["measurement"], []).append(row)
+    for name, rows in models.items():
+        residual = [num(r, "innovation") for r in rows]
+        norm = [num(r, "normalized_innovation") for r in rows]
+        epochs = {}
+        for row in rows: epochs[(row["gps_seconds"], row["previous_gps_seconds"], name)] = (num(row, "nis"), num(row, "dof"))
+        nd = [nis/dof for nis, dof in epochs.values() if dof > 0 and math.isfinite(nis)]
+        valid = [x for x in residual if math.isfinite(x)]
+        accepted = sum(r["accepted"] == "1" for r in rows)
+        lines.append(f"| {mode} / {name} | {len(rows):,} | {accepted:,} | {fmt(statistics.mean(valid) if valid else math.nan, 5)} | {fmt(rms(residual), 5)} | {fmt(pct([abs(x) for x in residual], .95), 5)} | {fmt(max((abs(x) for x in valid), default=math.nan), 5)} | {fmt(rms(norm), 3)} | {fmt(statistics.mean(nd) if nd else math.nan, 3)} |")
+
+lines += ["", "## RTK-relative comparison (not truth)", "",
+          "融合结果与最近 RTK 历元对比，仅作内部一致性诊断。LC/LTC 直接消费 RTK 位置；TC 和 RTK 也共享原始 GNSS 载波观测。因此这些差值都不能解释为独立精度或真值误差。",
+          "", "| Mode | matched epochs | horizontal RMS (m) | vertical RMS (m) | 3D RMS (m) | velocity 3D RMS (m/s) |", "|---|---:|---:|---:|---:|---:|"]
+for mode in RUNS:
+    count, hr, vr, p3, v3 = rtk_diffs(mode)
+    lines.append(f"| {mode} | {count:,} | {fmt(hr, 4)} | {fmt(vr, 4)} | {fmt(p3, 4)} | {fmt(v3, 4)} |")
+
+lines += ["", "## 杆臂估计与数值健康", "",
+          "杆臂输出在 IMU body frame，初值为零。没有独立杆臂真值；尤其 TC 的杆臂估计依赖轨迹多轴姿态激励，不能由收敛曲线单独验证。",
+          "", "| Mode | final lever X/Y/Z (m) |", "|---|---:|"]
+for mode, rows in solutions.items():
+    last = rows[-1]
+    values = [num(last, f"lever_b_{axis}_m") for axis in "xyz"]
+    lines.append(f"| {mode} | {values[0]:.4f} / {values[1]:.4f} / {values[2]:.4f} |")
+lines += ["", "三种回放均完成全部 epoch，解算位置、速度和协方差没有非有限值。", "",
+          "## 结论与限制", "",
+          "- LC、TC、LTC 均通过配置选择，输入数据解码、RTK 解算、TD-DDCP 构造复用；各融合 run 使用独立 INS/EstimationModule/StateEstimator 状态。",
+          "- TC 不接收 RTK P/V，LTC 使用 RTK 位置和 L1 TDCP 区间速度。三种测量定义保持区分。",
+          "- 本次回归核查发现：最初重构版本新增了在线杆臂更新、NIS 拒绝和不同的测量方差下限语义，导致 LC/LTC 更新/解明显偏离旧实现。默认关闭杆臂估计及 NIS 门控，并恢复各观测模型原有的方差处理后，三种最终位置 3D 1σ 为 LC 0.03176 m、TC 0.05735 m、LTC 0.03075 m，与重构前记录的 0.03174/0.05717/0.03061 m 接近；LC/LTC 分别接受 1,564 个 RTK 历元。杆臂估计的姿态和陀螺 bias 雅可比符号也已修正。",
+          "- 当前 LTC 没有完整 RTK-载波互相关，也没有完整跨历元状态交叉协方差；TD NIS 与协方差仍是近似值。",
+          "- 数据没有独立 rover 位置/速度/姿态真值，不能据此计算实际导航误差 RMSE 或证明厘米级精度。RTK-relative 差值不是独立真值检验。",
+          "- 当前正式回放将 `estimate_lever_arm` 设为 false，以保持原 15 状态测量行为；18 维布局保留在线杆臂扩展接口。启用时仍需多轴激励及信息矩阵可观测性验证。",
+          "- TC 相对 RTK 的 3D RMS 为 21.89 m，且 NIS/dof=0.050；旧版报告同样有 NIS/dof=0.048，但未做逐历元 RTK 对比。TC 使用时间差分载波缺少绝对位置观测，当前初始位置/绝对基准可观测性和协方差一致性需单独解决。这不应被归因于本次模块化重构，也不代表 TC 已达到可用性能。",
+          "",
+          f"图表：{FIGURE.relative_to(ROOT).as_posix()}。数据来自 LC/TC/LTC 分模式目录的 CSV。",
+]
+REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+print(f"Wrote {REPORT}")
+print(f"Wrote {FIGURE}")

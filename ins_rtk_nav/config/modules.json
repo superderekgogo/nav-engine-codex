@@ -19,8 +19,26 @@
     {
       "id": "ins_navigator",
       "type": "ins_navigator",
-      "imu_topic": "sensor.imu",
+      "replay_imu_topic": "navigation.replay.imu",
+      "snapshot_topic": "navigation.ins.snapshot",
+      "feedback_topic": "navigation.ins.feedback",
+      "feedback_applied_topic": "navigation.ins.feedback.applied",
+      "heading_lock_topic": "navigation.heading_lock.control",
+      "estimator_output_topic": "navigation.estimator.output",
+      "replay_control_topic": "navigation.replay.control",
       "solution_topic": "navigation.ins"
+    },
+    {
+      "id": "dynamic_status",
+      "type": "dynamic_status",
+      "subscribe_topic": "navigation.ins.snapshot",
+      "publish_topic": "navigation.dynamic_status"
+    },
+    {
+      "id": "constraint_manager",
+      "type": "constraint_manager",
+      "subscribe_topic": "navigation.dynamic_status",
+      "publish_topic": "navigation.constraints"
     },
     {
       "id": "navigation_csv",
@@ -55,16 +73,19 @@
       "publish_topic": "navigation.rtk"
     },
     {
-      "id": "ltc_fusion",
-      "type": "ltc_fusion",
-      "output_topic": "navigation.ltc",
-      "file_name": "ltc_solution.csv"
+      "id": "filter_manager",
+      "type": "filter_manager"
+    },
+    {
+      "id": "estimation",
+      "type": "estimation"
     },
     {
       "id": "ltc_csv",
       "type": "navigation_csv_sink",
-      "subscribe_topic": "navigation.ltc",
-      "file_name": "ltc_solution.csv"
+      "subscribe_topic": "navigation.ins",
+      "file_name": "ltc_solution.csv",
+      "output_rate_hz": 1.0
     },
     {
       "id": "rtk_csv",

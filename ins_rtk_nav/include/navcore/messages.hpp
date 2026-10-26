@@ -95,15 +95,85 @@ struct RtkPositionVelocityObservation {
   int used_satellites = 0;
   double ambiguity_ratio = 0.0;
 };
+struct DynamicStatus {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  std::string state = "unknown"; // stationary, moving, or unknown
+  double confidence = 0.0;
+  double gyro_rms_radps = 0.0;
+  double specific_force_norm_std_mps2 = 0.0;
+  double speed_mps = 0.0;
+  bool high_dynamic = false;
+};
+struct ConstraintObservation {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  std::string type; // zupt, nhc, zpc, or zhc
+  double confidence = 0.0;
+};
 struct NavigationSolution {
   double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
   Eigen::Vector3d lla_rad_m = Eigen::Vector3d::Zero();
   Eigen::Vector3d ecef_m = Eigen::Vector3d::Zero();
   Eigen::Vector3d velocity_ned_mps = Eigen::Vector3d::Zero();
   Eigen::Quaterniond q_body_to_ned = Eigen::Quaterniond::Identity();
+  Eigen::Vector3d gyro_bias_radps = Eigen::Vector3d::Zero();
+  Eigen::Vector3d accel_bias_mps2 = Eigen::Vector3d::Zero();
+  Eigen::Vector3d lever_arm_body_m = Eigen::Vector3d::Zero();
   std::optional<double> position_3d_rms_1sigma_m;
   std::optional<double> velocity_3d_rms_1sigma_mps;
   std::optional<double> attitude_3d_rms_1sigma_deg;
+  std::optional<double> roll_rms_1sigma_deg;
+  std::optional<double> pitch_rms_1sigma_deg;
+  std::optional<double> heading_rms_1sigma_deg;
+  std::optional<double> free_heading_rms_1sigma_deg;
+  bool heading_lock_active = false;
+  std::uint64_t heading_lock_id = 0;
+  std::optional<double> heading_lock_heading_deg;
+  std::optional<double> heading_lock_applied_correction_deg;
+};
+struct InertialStateSnapshot {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  ImuSample imu;
+  NavigationSolution predicted_state;
+};
+struct ReplayControl { bool reset = false; bool complete = false; };
+struct NavigationMeasurementBundle {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  std::optional<RtkPositionVelocityObservation> rtk;
+  std::optional<PreparedTdDdCarrierPhaseEpoch> td_ddcp;
+  std::vector<ConstraintObservation> constraints;
+};
+struct ErrorStateFeedback {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  Eigen::VectorXd correction;
+};
+struct FeedbackApplied { double gps_seconds = 0.0; std::uint64_t epoch_id = 0; bool accepted = false; };
+struct HeadingLockControl {
+  bool active = false;
+  std::uint64_t lock_id = 0;
+  double heading_rad = 0.0;
+  double sigma_rad = 0.0;
+  Eigen::Vector3d reference_lla_rad_m = Eigen::Vector3d::Zero();
+};
+struct EstimatorOutput {
+  double gps_seconds = 0.0;
+  std::uint64_t epoch_id = 0;
+  double position_3d_rms_1sigma_m = 0.0;
+  double velocity_3d_rms_1sigma_mps = 0.0;
+  double attitude_3d_rms_1sigma_deg = 0.0;
+  double roll_rms_1sigma_deg = 0.0;
+  double pitch_rms_1sigma_deg = 0.0;
+  double heading_rms_1sigma_deg = 0.0;
+  double free_heading_rms_1sigma_deg = 0.0;
+  bool heading_lock_active = false;
+  std::uint64_t heading_lock_id = 0;
+  double heading_lock_heading_deg = 0.0;
+  double heading_lock_applied_correction_deg = 0.0;
 };
 struct DatasetSummary {
   std::uint64_t imu_samples = 0;

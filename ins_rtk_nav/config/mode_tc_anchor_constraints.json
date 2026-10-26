@@ -1,0 +1,8 @@
+{
+  "include": ["system.json"],
+  "paths": {"output": "../build/mode_tc_anchor_constraints"},
+  "fusion_model": {
+    "combination_mode": "tc",
+    "measurement_models": ["td_ddcp_tight_v1", "zupt_stationary_v1", "vehicle_nhc_v1", "zero_position_change_v1", "zero_heading_change_v1"]
+  }
+}

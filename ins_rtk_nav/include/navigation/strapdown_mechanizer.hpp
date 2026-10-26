@@ -26,6 +26,8 @@ public:
     state_ = state;
     gyro_bias_ += gyro_bias_correction_radps;
     accel_bias_ += accel_bias_correction_mps2;
+    state_.gyro_bias_radps = gyro_bias_;
+    state_.accel_bias_mps2 = accel_bias_;
   }
   const Eigen::Vector3d& gyroBias() const noexcept { return gyro_bias_; }
   const Eigen::Vector3d& accelBias() const noexcept { return accel_bias_; }

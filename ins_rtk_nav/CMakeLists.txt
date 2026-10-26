@@ -14,12 +14,15 @@ add_library(navcore
   src/core/module_manager.cpp
   src/navigation/strapdown_mechanizer.cpp
   src/navigation/measurement_models.cpp
+  src/navigation/state_estimator.cpp
   src/navigation/gnss_preprocessor.cpp
   src/modules/dataset_modules.cpp
   src/modules/measurement_modules.cpp
   src/modules/gnss_preprocessor_module.cpp
   src/modules/ins_navigator.cpp
-  src/modules/ltc_fusion_module.cpp
+  src/modules/filter_manager_module.cpp
+  src/modules/estimation_module.cpp
+  src/modules/constraint_modules.cpp
   src/modules/runtime_modules.cpp
   src/adapters/rtklib/rtklib_adapter.cpp
   src/modules/rtk_solution_module.cpp

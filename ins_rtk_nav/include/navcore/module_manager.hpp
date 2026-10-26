@@ -26,8 +26,10 @@ private:
 void registerRuntimeModules(ModuleRegistry& registry);
 void registerDatasetModules(ModuleRegistry& registry);
 void registerNavigatorModule(ModuleRegistry& registry);
-void registerLtcFusionModule(ModuleRegistry& registry);
+void registerFilterManagerModule(ModuleRegistry& registry);
+void registerEstimationModule(ModuleRegistry& registry);
 void registerMeasurementModules(ModuleRegistry& registry);
 void registerGnssPreprocessingModules(ModuleRegistry& registry);
 void registerRtkModules(ModuleRegistry& registry);
+void registerConstraintModules(ModuleRegistry& registry);
 }

@@ -14,7 +14,9 @@ int main(int argc, char** argv) {
     navcore::registerRuntimeModules(registry);
     navcore::registerDatasetModules(registry);
     navcore::registerNavigatorModule(registry);
-  navcore::registerLtcFusionModule(registry);
+    navcore::registerFilterManagerModule(registry);
+    navcore::registerEstimationModule(registry);
+    navcore::registerConstraintModules(registry);
     navcore::registerMeasurementModules(registry);
     navcore::registerGnssPreprocessingModules(registry);
     navcore::registerRtkModules(registry);

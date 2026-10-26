@@ -66,6 +66,8 @@ StrapdownMechanizer::StrapdownMechanizer(const InsInitialState& initial)
   state_.ecef_m = llaToEcef(state_.lla_rad_m);
   state_.velocity_ned_mps = initial.velocity_ned_mps;
   state_.q_body_to_ned = eulerNedToQuaternion(initial.euler_rpy_rad).normalized();
+  state_.gyro_bias_radps = gyro_bias_;
+  state_.accel_bias_mps2 = accel_bias_;
 }
 
 std::optional<navcore::NavigationSolution> StrapdownMechanizer::update(const navcore::ImuSample& sample) {
