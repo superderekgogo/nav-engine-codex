@@ -1,0 +1,60 @@
+{
+  "algorithm": "gmis",
+  "combination_mode": "gmis_lc",
+  "modules": {
+    "filter_manager": "gmis_filter_manager_v1",
+    "estimation": "gmis_estimation_module_v1",
+    "state_estimator": "generic_ekf_v1"
+  },
+  "frames": {
+    "navigation": "NED",
+    "body": "FRD",
+    "attitude_parameterization": "euler_zyx_roll_pitch_heading",
+    "position_reference": "local_origin",
+    "geodetic_origin_lla_rad_m": [0.765022974771942, -1.3870524044472416, 186.8588823955506]
+  },
+  "state_layout": "gmis_single_imu_euler_21d_fixed_lever_v1",
+  "imu_model": {
+    "model_id": "gmis_imu_earth_aware_v1",
+    "gyro_rate_convention": "body_relative_inertial",
+    "accelerometer_input": "specific_force_mps2",
+    "earth_rotation_and_transport_terms": "modeled",
+    "raw_body_relative_inertial_gyro_supported": true
+  },
+  "measurement_models": [
+    "imu_raw_gyro_accel_v1",
+    "rtk_position_loose_v1",
+    "rtk_velocity_loose_v1"
+  ],
+  "gnss": {
+    "position_frame": "NED",
+    "velocity_frame": "NED",
+    "antenna_lever_arm_body_m": [0.0, 0.0, 0.0],
+    "lever_arm_status": "fixed_from_previous_solution_zero_not_independently_calibrated"
+  },
+  "process_noise": {
+    "jerk_variance_m2ps6": [1.0, 1.0, 1.0],
+    "angular_acceleration_variance_rad2ps4": [0.0001, 0.0001, 0.0001],
+    "gyro_bias_rw_psd": [1e-10, 1e-10, 1e-10],
+    "accel_bias_rw_psd": [1e-8, 1e-8, 1e-8]
+  },
+  "measurement_noise": {
+    "gyro_sigma_radps": [0.005, 0.005, 0.005],
+    "accel_sigma_mps2": [0.05, 0.05, 0.05],
+    "rtk_position_sigma_m": [0.5, 0.5, 1.0],
+    "rtk_velocity_sigma_mps": [0.2, 0.2, 0.3]
+  },
+  "profile_status": "gmis_lc_replay_prototype",
+  "runtime": {
+    "imu_file": "../../../data1/imu/IMU_100Hz.txt",
+    "rtk_solution_file": "../../../ins_rtk_nav/build/mode_lc/rtk_solution.csv",
+    "output_file": "../../../output/gmis_lc/gmis_lc_solution.csv",
+    "initial_attitude_rph_rad": [0.0, 0.0, 0.0],
+    "initial_position_sigma_m": [10.0, 10.0, 10.0],
+    "initial_velocity_sigma_mps": [5.0, 5.0, 5.0],
+    "initial_attitude_sigma_rad": [0.5, 0.5, 3.141592653589793],
+    "initial_acceleration_sigma_mps2": [1.0, 1.0, 1.0],
+    "initial_angular_rate_sigma_radps": [0.1, 0.1, 0.1],
+    "initial_sensor_error_sigma": 0.1
+  }
+}

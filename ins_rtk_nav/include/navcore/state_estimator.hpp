@@ -26,6 +26,11 @@ class StateEstimator {
 public:
   void initialize(const Eigen::VectorXd& state, const Eigen::MatrixXd& covariance);
   void predict(const Eigen::MatrixXd& transition, const Eigen::MatrixXd& process_noise);
+  // Nonlinear-model overload: the caller supplies f(x), its Jacobian F, and Q.
+  // The existing linear overload remains unchanged for the TMIS error-state path.
+  void predict(const Eigen::VectorXd& predicted_state,
+               const Eigen::MatrixXd& transition_jacobian,
+               const Eigen::MatrixXd& process_noise);
   EstimatorUpdateResult update(const Eigen::VectorXd& innovation,
                               const Eigen::MatrixXd& observation_jacobian,
                               const Eigen::MatrixXd& measurement_noise,
@@ -42,3 +47,11 @@ private:
 };
 
 } // namespace navcore
+
+// Stable namespace for the domain-agnostic estimator. navcore is retained as
+// a source-compatible alias for the existing TMIS modules.
+namespace nav::core {
+using StateEstimator = ::navcore::StateEstimator;
+using EstimatorUpdateOptions = ::navcore::EstimatorUpdateOptions;
+using EstimatorUpdateResult = ::navcore::EstimatorUpdateResult;
+} // namespace nav::core

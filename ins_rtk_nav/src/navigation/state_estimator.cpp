@@ -40,6 +40,23 @@ void StateEstimator::predict(const Eigen::MatrixXd& transition, const Eigen::Mat
   requireFinite(covariance_, "predicted covariance");
 }
 
+void StateEstimator::predict(const Eigen::VectorXd& predicted_state,
+                             const Eigen::MatrixXd& transition_jacobian,
+                             const Eigen::MatrixXd& process_noise) {
+  if (!initialized_) throw std::logic_error("StateEstimator is not initialized");
+  const Eigen::Index n = state_.size();
+  if (predicted_state.size() != n || transition_jacobian.rows() != n ||
+      transition_jacobian.cols() != n || process_noise.rows() != n || process_noise.cols() != n)
+    throw std::invalid_argument("StateEstimator nonlinear prediction dimension mismatch");
+  requireFinite(predicted_state, "predicted state");
+  requireFinite(transition_jacobian, "transition Jacobian");
+  requireFinite(process_noise, "process noise");
+  state_ = predicted_state;
+  covariance_ = transition_jacobian * covariance_ * transition_jacobian.transpose() + process_noise;
+  covariance_ = 0.5 * (covariance_ + covariance_.transpose());
+  requireFinite(covariance_, "predicted covariance");
+}
+
 EstimatorUpdateResult StateEstimator::update(const Eigen::VectorXd& innovation,
                                              const Eigen::MatrixXd& observation_jacobian,
                                              const Eigen::MatrixXd& measurement_noise,

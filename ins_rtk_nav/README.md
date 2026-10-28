@@ -70,6 +70,28 @@ Each replay writes its CSV files in `build/mode_lc`, `build/mode_tc`, or `build/
 
 The first 18-state refactor changed filter behavior by enabling lever-arm updates and NIS rejection, and by adding a variance term instead of applying the original minimum-variance floor. These were corrected: lever-arm estimation and NIS gating are now opt-in, the Jacobian signs were fixed, and the original noise-floor semantics were restored. The final position 3D 1σ is now 0.03176 m / 0.05735 m / 0.03075 m for LC/TC/LTC, close to the pre-refactor recorded 0.03174 m / 0.05717 m / 0.03061 m. LC/LTC again use all 1,564 RTK epochs. These are covariance estimates, not truth errors.
 
+## GMIS-LC model-validation slice
+
+An isolated `nav_gmis` C++ library contains the GMIS full-state model under `nav::gmis`; it links shared domain-agnostic `nav_core` and has no dependency on the TMIS mechanization target. `nav::core::StateEstimator` provides a nonlinear prediction overload accepting `f(x)`, its Jacobian, and process noise while preserving the existing TMIS linear API. `GmisLcEstimatorSession` combines the 21-state kinematic model with IMU and RTK P/V observation updates.
+
+The GMIS LC convention is NED navigation, FRD body, ZYX rotation, and attitude state order `[roll, pitch, heading]`. Its reduced state is 21-dimensional: position, velocity, acceleration, attitude, angular rate, gyro bias, and accelerometer bias; sensor scale factors are not estimated. `config/gmis/gmis_lc.json` selects the Earth-aware IMU model and provides the fixed body-frame antenna lever arm. The raw gyro is modeled as body-relative-inertial rate; NED Earth rate, transport rate, normal gravity, and Coriolis acceleration are included. Local NED position uses the configured geodetic origin. The current fixed lever value `(0,0,0) m` is inherited from the earlier replay output, where lever estimation was disabled; it is not an independently calibrated value.
+
+Centered finite-difference checks report maximum absolute Jacobian errors of `4.85e-9` (transition), `7.92e-11` (rotation partials), `1.35e-9` (simplified IMU observation), `7.48e-10` (Earth-aware IMU observation), `7.67e-10` (dynamic Earth-aware IMU observation), and `6.04e-9` (RTK P/V observation with a nonzero fixed lever arm). The static Earth-aware model returns the expected Earth-rate gyro and gravity specific force. The checks were run with:
+
+```powershell
+cmake --build build --config Release --target gmis_lc_math_validation
+ctest --test-dir build -C Release --output-on-failure
+```
+
+`gmis_lc_app` is a separate runtime executable from `ins_rtk_app`. It loads the GMIS JSON profile, reads the IMU text stream and an existing RTK solution CSV, schedules RTK P/V and IMU updates through `GmisLcEstimatorSession`, and writes a 1 Hz solution/covariance/innovation CSV. Data paths, initialization seeds, fixed lever arm, and initial uncertainty are set in `config/gmis/gmis_lc.json`. RTK velocity is down-weighted when the source CSV reports weak variance. The replay remains a prototype without independent truth. GMIS_LTC, raw-GNSS replay, and module-bus integration remain future work. Existing TMIS runner/configuration and outputs remain separate.
+
+Run it from the `ins_rtk_nav` directory after building:
+
+```powershell
+cmake --build build --config Release --target gmis_lc_app
+.\build\Release\gmis_lc_app.exe .\config\gmis\gmis_lc.json
+```
+
 The experimental DynamicStatus/ZUPT/NHC pipeline can be selected with `config/mode_lc_constraints.json`, `mode_tc_constraints.json`, or `mode_ltc_constraints.json`. Add static-anchor position/heading constraints with `config/mode_lc_anchor_constraints.json`, `mode_tc_anchor_constraints.json`, or `mode_ltc_anchor_constraints.json`. ZPC and ZHC each require an accepted same-epoch ZUPT and are gated independently; rejecting ZPC does not suppress ZHC. ZPC uses the 4-state static-anchor clone. ZHC uses a separate `HeadingLockState`: after its first accepted stationary update, the INS output heading is projected to the captured value and the reported lock 1σ remains at the captured value until release. The free ESKF heading 1σ is emitted separately as `free_heading_rms_1sigma_deg`; this remains the filter's unconstrained covariance diagnostic. The three anchor-constraint modes have been replayed and summarized in `../output/ZPC_ZHC_Performance_Report.md`, including lock stability and covariance statistics. The lock holds an existing estimate and is not an independent heading observation or a truth RMSE. Noise values and dynamic thresholds are experimental and not independently validated.
 
 TC remains a separate model issue: it has 21.89 m 3D RMS difference from RTK in the unconstrained baseline and mean NIS/dof 0.050 (the pre-refactor report recorded 0.048). TD-DDCP supplies relative motion but no absolute position measurement; the current initial position/absolute datum observability and temporal innovation correlation need review. TC-relative differences are diagnostics because RTK shares raw carrier observations, not independent truth. LTC does not retain full cross-epoch state covariance or RTK/phase cross-covariance. No independent rover truth is available, so absolute RMSE and centimeter-level accuracy are unverified. The current satellite mapping assumes GPS PRNs and requires confirmation. Full cross-correlation modeling between static constraints and GNSS/TDCP remains future work.
