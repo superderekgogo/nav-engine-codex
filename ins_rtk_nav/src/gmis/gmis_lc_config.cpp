@@ -45,18 +45,23 @@ Eigen::Matrix<double, 6, 6> diagonalVariance(const Eigen::Vector3d& first_sigma,
 GmisLcConfiguration GmisLcConfiguration::fromJson(const navcore::Json& json) {
   if (!json.isObject()) throw std::invalid_argument("GMIS configuration root must be an object");
   requireString(json, "algorithm", "gmis");
-  requireString(json, "combination_mode", "gmis_lc");
+  const std::string mode = json.at("combination_mode").asString();
+  if (mode != "gmis_lc" && mode != "gmis_ltc" && mode != "gmis_tc")
+    throw std::invalid_argument("unsupported GMIS combination_mode: " + mode);
 
   const auto& modules = json.at("modules");
-  requireString(modules, "filter_manager", "gmis_filter_manager_v1");
-  requireString(modules, "estimation", "gmis_estimation_module_v1");
+  requireString(modules, "filter_manager", mode == "gmis_ltc" ? "gmis_ltc_filter_manager_v1" :
+      (mode == "gmis_tc" ? "gmis_tc_filter_manager_v1" : "gmis_filter_manager_v1"));
+  requireString(modules, "estimation", mode == "gmis_ltc" ? "gmis_ltc_estimation_module_v1" :
+      (mode == "gmis_tc" ? "gmis_tc_estimation_module_v1" : "gmis_estimation_module_v1"));
   requireString(modules, "state_estimator", "generic_ekf_v1");
 
   const auto& frames = json.at("frames");
   requireString(frames, "navigation", "NED");
   requireString(frames, "body", "FRD");
   requireString(frames, "attitude_parameterization", "euler_zyx_roll_pitch_heading");
-  requireString(json, "state_layout", "gmis_single_imu_euler_21d_fixed_lever_v1");
+  requireString(json, "state_layout", mode == "gmis_ltc" ? "gmis_ltc_dual_epoch_euler_42d_fixed_lever_v1" :
+      (mode == "gmis_tc" ? "gmis_tc_dynamic_dd_ambiguity_euler_v1" : "gmis_single_imu_euler_21d_fixed_lever_v1"));
 
   const auto& imu = json.at("imu_model");
   const std::string model_id = imu.at("model_id").asString();
@@ -84,16 +89,27 @@ GmisLcConfiguration GmisLcConfiguration::fromJson(const navcore::Json& json) {
     throw std::invalid_argument("GMIS geodetic origin latitude must be within [-pi/2, pi/2]");
 
   const auto& model_ids = json.at("measurement_models").asArray();
-  bool has_imu = false, has_position = false, has_velocity = false;
+  bool has_imu = false, has_position = false, has_velocity = false, has_tdcp = false;
   for (const auto& item : model_ids) {
     if (!item.isString()) throw std::invalid_argument("measurement_models must contain strings");
     const auto& id = item.asString();
     has_imu = has_imu || id == "imu_raw_gyro_accel_v1";
     has_position = has_position || id == "rtk_position_loose_v1";
     has_velocity = has_velocity || id == "rtk_velocity_loose_v1";
+    has_tdcp = has_tdcp || id == "l1_td_ddcp_lag_state_v1";
   }
-  if (!has_imu || !has_position || !has_velocity)
+  bool hasTcCodeC1=false,hasTcCodeP2=false,hasTcPhaseL1=false,hasTcPhaseL2=false;
+  for (const auto& item : model_ids) if (item.isString()) {
+    hasTcCodeC1=hasTcCodeC1||item.asString()=="dd_code_c1_v1";
+    hasTcCodeP2=hasTcCodeP2||item.asString()=="dd_code_p2_v1";
+    hasTcPhaseL1=hasTcPhaseL1||item.asString()=="dd_phase_l1_float_v1";
+    hasTcPhaseL2=hasTcPhaseL2||item.asString()=="dd_phase_l2_float_v1";
+  }
+  if (!has_imu || (mode == "gmis_lc" && (!has_position || !has_velocity)) ||
+      (mode == "gmis_ltc" && (!has_position || !has_tdcp || has_velocity)) ||
+      (mode == "gmis_tc" && (!hasTcCodeC1 || !hasTcCodeP2 || !hasTcPhaseL1 || !hasTcPhaseL2 || has_position || has_velocity)))
     throw std::invalid_argument("GMIS_LC requires IMU, RTK position, and RTK velocity measurement models");
+  config.combination_mode = mode;
 
   const auto& process = json.at("process_noise");
   config.process_noise.jerk_variance = vector3(process, "jerk_variance_m2ps6");

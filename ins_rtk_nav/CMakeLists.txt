@@ -16,12 +16,20 @@ target_include_directories(nav_core PUBLIC include)
 target_include_directories(nav_core SYSTEM PUBLIC "${NAVCORE_EIGEN_DIR}")
 target_compile_features(nav_core PUBLIC cxx_std_17)
 
-add_library(navcore
+# Sensor decoding and GNSS-only preprocessing are shared by TMIS and GMIS.
+# Keep them independent from the TMIS mechanization / RTKLIB adapter.
+add_library(nav_sensors STATIC
   src/core/data_decode.cpp
-  src/core/module_manager.cpp
-  src/navigation/strapdown_mechanizer.cpp
   src/navigation/measurement_models.cpp
   src/navigation/gnss_preprocessor.cpp
+)
+target_include_directories(nav_sensors PUBLIC include)
+target_include_directories(nav_sensors SYSTEM PUBLIC "${NAVCORE_EIGEN_DIR}")
+target_compile_features(nav_sensors PUBLIC cxx_std_17)
+
+add_library(navcore
+  src/core/module_manager.cpp
+  src/navigation/strapdown_mechanizer.cpp
   src/modules/dataset_modules.cpp
   src/modules/measurement_modules.cpp
   src/modules/gnss_preprocessor_module.cpp
@@ -62,7 +70,7 @@ target_include_directories(rtklib_core PUBLIC "${NAVCORE_RTKLIB_DIR}")
 target_include_directories(rtklib_core PRIVATE "${NAVCORE_EIGEN_DIR}")
 target_compile_definitions(rtklib_core PRIVATE ENAGLO ENAQZS ENACMP EXTGSI)
 target_compile_features(rtklib_core PRIVATE cxx_std_17)
-target_link_libraries(navcore PUBLIC rtklib_core nav_core)
+target_link_libraries(navcore PUBLIC rtklib_core nav_core nav_sensors)
 if(WIN32)
   target_link_libraries(navcore PUBLIC winmm)
 endif()
@@ -78,16 +86,23 @@ add_library(nav_gmis STATIC
   src/gmis/gmis_lc_config.cpp
   src/gmis/gmis_lc_models.cpp
   src/gmis/gmis_lc_estimation.cpp
+  src/gmis/gmis_ltc_estimation.cpp
+  src/gmis/gmis_tc_estimation.cpp
 )
 target_include_directories(nav_gmis PUBLIC include)
 target_include_directories(nav_gmis SYSTEM PUBLIC "${NAVCORE_EIGEN_DIR}")
 target_compile_features(nav_gmis PUBLIC cxx_std_17)
 target_link_libraries(nav_gmis PUBLIC nav_core)
+target_link_libraries(nav_gmis PUBLIC nav_sensors)
 
 add_executable(gmis_lc_math_validation tools/gmis_lc_math_validation.cpp)
 target_link_libraries(gmis_lc_math_validation PRIVATE nav_gmis)
 add_executable(gmis_lc_app src/gmis/gmis_lc_app.cpp)
 target_link_libraries(gmis_lc_app PRIVATE nav_gmis)
+add_executable(gmis_ltc_app src/gmis/gmis_ltc_app.cpp)
+target_link_libraries(gmis_ltc_app PRIVATE nav_gmis)
+add_executable(gmis_tc_app src/gmis/gmis_tc_app.cpp)
+target_link_libraries(gmis_tc_app PRIVATE nav_gmis)
 include(CTest)
 if(BUILD_TESTING)
   add_test(NAME gmis_lc_math_validation
@@ -102,6 +117,8 @@ if(MSVC)
   target_compile_options(nav_gmis PRIVATE /W4 /permissive-)
   target_compile_options(gmis_lc_math_validation PRIVATE /W4 /permissive-)
   target_compile_options(gmis_lc_app PRIVATE /W4 /permissive-)
+  target_compile_options(gmis_ltc_app PRIVATE /W4 /permissive-)
+  target_compile_options(gmis_tc_app PRIVATE /W4 /permissive-)
   target_compile_options(navcore PRIVATE /W4 /permissive-)
   target_compile_options(ins_rtk_app PRIVATE /W4 /permissive-)
 else()
@@ -109,8 +126,10 @@ else()
   target_compile_options(nav_gmis PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(gmis_lc_math_validation PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(gmis_lc_app PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(gmis_ltc_app PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(gmis_tc_app PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(navcore PRIVATE -Wall -Wextra -Wpedantic)
   target_compile_options(ins_rtk_app PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-install(TARGETS ins_rtk_app gmis_lc_app RUNTIME DESTINATION bin)
+install(TARGETS ins_rtk_app gmis_lc_app gmis_ltc_app gmis_tc_app RUNTIME DESTINATION bin)
