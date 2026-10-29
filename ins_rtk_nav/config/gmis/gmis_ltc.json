@@ -5,6 +5,8 @@
   "modules": {
     "filter_manager": "gmis_ltc_filter_manager_v1",
     "estimation": "gmis_ltc_estimation_module_v1",
+    "dynamic_status": "gmis_ltc_dynamic_status_v1",
+    "constraint_manager": "gmis_ltc_constraint_manager_v1",
     "state_estimator": "generic_ekf_v1"
   },
   "frames": {
@@ -22,7 +24,32 @@
     "earth_rotation_and_transport_terms": "modeled",
     "raw_body_relative_inertial_gyro_supported": true
   },
-  "measurement_models": ["imu_raw_gyro_accel_v1", "rtk_position_loose_v1", "l1_td_ddcp_lag_state_v1"],
+  "measurement_models": [
+    "imu_raw_gyro_accel_v1", "rtk_position_loose_v1", "l1_td_ddcp_lag_state_v1",
+    "zupt_stationary_v1", "vehicle_nhc_v1", "zero_position_change_v1", "zero_heading_change_v1"
+  ],
+  "dynamic_status": {
+    "window_seconds": 0.5,
+    "minimum_dwell_seconds": 0.8,
+    "stationary_gyro_rms_radps": 0.02,
+    "stationary_force_norm_std_mps2": 0.08,
+    "stationary_speed_mps": 0.3,
+    "moving_gyro_rms_radps": 0.035,
+    "moving_force_norm_std_mps2": 0.12,
+    "moving_speed_mps": 0.6,
+    "high_dynamic_gyro_rms_radps": 0.2,
+    "high_dynamic_force_norm_std_mps2": 0.3
+  },
+  "constraints": {
+    "minimum_confidence": 0.5,
+    "minimum_update_interval_seconds": 1.0,
+    "zupt_sigma_mps": 0.05,
+    "nhc_sigma_lateral_mps": 0.1,
+    "nhc_sigma_vertical_mps": 0.1,
+    "zero_position_change_sigma_m": 0.05,
+    "zero_heading_change_sigma_deg": 0.5,
+    "nis_gate": 16.27
+  },
   "gnss": {
     "position_frame": "NED",
     "position_reference": "antenna_phase_center",
@@ -52,8 +79,9 @@
   "runtime": {
     "imu_file": "../../../data1/imu/IMU_100Hz.txt",
     "rtk_solution_file": "../../../output/tmis_lc_rtk_restored.csv",
-    "output_file": "../../../output/gmis_ltc/gmis_ltc_solution.csv",
+    "output_file": "../../../output/gmis_ltc_zupt_nhc/gmis_ltc_solution.csv",
     "tdcp_innovations_file": "../../../output/gmis_ltc/tdcp_innovations.csv",
+    "constraint_innovations_file": "../../../output/gmis_ltc_zupt_nhc/constraint_innovations.csv",
     "gnss_epoch_tolerance_seconds": 0.000001,
     "initial_attitude_rph_rad": [0.0, 0.0, 0.0],
     "initial_position_sigma_m": [10.0, 10.0, 10.0],

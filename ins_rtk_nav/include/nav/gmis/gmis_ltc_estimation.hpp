@@ -20,6 +20,11 @@ public:
       const Eigen::Vector3d& base_position_ecef,
       const navcore::PreparedTdDdCarrierPhaseEpoch* tdcp,
       double tdcp_variance_inflation);
+  nav::core::EstimatorUpdateResult updateZupt(double sigma_mps, double nis_gate);
+  nav::core::EstimatorUpdateResult updateNhc(double sigma_lateral_mps, double sigma_vertical_mps,
+                                              double nis_gate);
+  nav::core::EstimatorUpdateResult updateZeroPositionChange(double sigma_m, double nis_gate);
+  nav::core::EstimatorUpdateResult updateZeroHeadingChange(double sigma_rad, double nis_gate);
   void rollLagWindow();
   const Eigen::VectorXd& state() const noexcept { return estimator_.state(); }
   const Eigen::MatrixXd& covariance() const noexcept { return estimator_.covariance(); }

@@ -140,6 +140,67 @@ nav::core::EstimatorUpdateResult GmisLtcEstimatorSession::updateEpoch(
   return result;
 }
 
+nav::core::EstimatorUpdateResult GmisLtcEstimatorSession::updateZupt(double sigma,double gate) {
+  constexpr int n=StateIndex::dimension;
+  if(sigma<=0||gate<0)throw std::invalid_argument("invalid ZUPT noise/gate");
+  Eigen::Matrix<double,3,1> innovation=-estimator_.state().tail(n).segment<3>(StateIndex::velocity);
+  Eigen::Matrix<double,3,Eigen::Dynamic> h=Eigen::Matrix<double,3,Eigen::Dynamic>::Zero(3,2*n);
+  h.block<3,3>(0,n+StateIndex::velocity).setIdentity();
+  Eigen::Matrix3d r=Eigen::Matrix3d::Identity()*(sigma*sigma);
+  nav::core::EstimatorUpdateOptions options;if(gate>0)options.nis_gate=gate;
+  return estimator_.update(innovation,h,r,options);
+}
+
+nav::core::EstimatorUpdateResult GmisLtcEstimatorSession::updateNhc(double sigma_lateral,
+                                                                    double sigma_vertical,double gate) {
+  constexpr int n=StateIndex::dimension;
+  if(sigma_lateral<=0||sigma_vertical<=0||gate<0)throw std::invalid_argument("invalid NHC noise/gate");
+  const Eigen::VectorXd current=estimator_.state().tail(n);
+  const auto body_constraint=[](const Eigen::VectorXd& x) {
+    const Eigen::Vector3d body=GmisLcModels::cNedToBody(x.segment<3>(StateIndex::attitude))*
+                               x.segment<3>(StateIndex::velocity);
+    return Eigen::Vector2d(body.y(),body.z()); // FRD lateral/right and down velocities.
+  };
+  const Eigen::Vector2d innovation=-body_constraint(current);
+  Eigen::Matrix<double,2,Eigen::Dynamic> h=Eigen::Matrix<double,2,Eigen::Dynamic>::Zero(2,2*n);
+  for(int col=0;col<6;++col) {
+    const int state_index=col<3?StateIndex::velocity+col:StateIndex::attitude+(col-3);
+    const double step=col<3?1e-5:1e-6;
+    Eigen::VectorXd plus=current,minus=current;plus[state_index]+=step;minus[state_index]-=step;
+    h.col(n+state_index)=(body_constraint(plus)-body_constraint(minus))/(2.0*step);
+  }
+  Eigen::Matrix2d r=Eigen::Matrix2d::Zero();
+  r(0,0)=sigma_lateral*sigma_lateral;r(1,1)=sigma_vertical*sigma_vertical;
+  nav::core::EstimatorUpdateOptions options;if(gate>0)options.nis_gate=gate;
+  return estimator_.update(innovation,h,r,options);
+}
+
+nav::core::EstimatorUpdateResult GmisLtcEstimatorSession::updateZeroPositionChange(double sigma,double gate) {
+  constexpr int n=StateIndex::dimension;
+  if(sigma<=0||gate<0)throw std::invalid_argument("invalid ZPC noise/gate");
+  const Eigen::Vector3d change=estimator_.state().segment<3>(n+StateIndex::position)-
+                               estimator_.state().segment<3>(StateIndex::position);
+  Eigen::Matrix<double,3,Eigen::Dynamic> h=Eigen::Matrix<double,3,Eigen::Dynamic>::Zero(3,2*n);
+  h.block<3,3>(0,StateIndex::position)=-Eigen::Matrix3d::Identity();
+  h.block<3,3>(0,n+StateIndex::position)=Eigen::Matrix3d::Identity();
+  Eigen::Matrix3d r=Eigen::Matrix3d::Identity()*(sigma*sigma);
+  nav::core::EstimatorUpdateOptions options;if(gate>0)options.nis_gate=gate;
+  return estimator_.update(-change,h,r,options);
+}
+
+nav::core::EstimatorUpdateResult GmisLtcEstimatorSession::updateZeroHeadingChange(double sigma,double gate) {
+  constexpr int n=StateIndex::dimension;constexpr double two_pi=6.28318530717958647692;
+  if(sigma<=0||gate<0)throw std::invalid_argument("invalid ZHC noise/gate");
+  const double prev=estimator_.state()(StateIndex::attitude+2);
+  const double curr=estimator_.state()(n+StateIndex::attitude+2);
+  const double change=std::remainder(curr-prev,two_pi);
+  Eigen::Matrix<double,1,Eigen::Dynamic> h=Eigen::Matrix<double,1,Eigen::Dynamic>::Zero(1,2*n);
+  h(0,StateIndex::attitude+2)=-1.0;h(0,n+StateIndex::attitude+2)=1.0;
+  Eigen::Matrix<double,1,1> r;r(0,0)=sigma*sigma;
+  nav::core::EstimatorUpdateOptions options;if(gate>0)options.nis_gate=gate;
+  return estimator_.update(Eigen::VectorXd::Constant(1,-change),h,r,options);
+}
+
 void GmisLtcEstimatorSession::rollLagWindow() {
   constexpr int n=StateIndex::dimension;
   const Eigen::VectorXd cur=estimator_.state().tail(n);

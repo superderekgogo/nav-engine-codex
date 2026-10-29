@@ -237,6 +237,11 @@ def load_trajectory(path: Path) -> tuple[list[dict[str, float]], int]:
                     "imuNis": values["imu_nis"], "rtkNis": values["gnss_nis"],
                     "imuAccepted": int(row.get("imu_update_accepted", "0")),
                     "rtkAccepted": int(row.get("gnss_update_accepted", row.get("rtk_update_accepted", "0"))),
+                    "zuptNis": _optional_float(row.get("zupt_nis")),
+                    "nhcNis": _optional_float(row.get("nhc_nis")),
+                    "zpcNis": _optional_float(row.get("zpc_nis")),
+                    "zhcNis": _optional_float(row.get("zhc_nis")),
+                    "dynamicStatus": row.get("dynamic_status", "unknown"),
                 })
             if not rows:
                 raise ValueError("CSV contains no usable GMIS navigation rows")
@@ -522,12 +527,12 @@ def page_html_comparison(datasets: dict[str, list[dict[str, float]]], local_url:
 <body><header class="top"><div class="title">LC / TC / LTC Navigation Regression Explorer</div><div class="sub">Current 18-state replay · covariance 1σ and pre-update innovations</div></header>
 <main class="grid"><section class="card"><div class="head"><span>Trajectory overlay</span><span class="badge" id="mapstatus">Loading OpenStreetMap</span></div><div class="mapbox"><div class="map" id="osm"></div><div class="map" id="fallback"></div></div><div class="foot" id="mapfoot">OpenStreetMap © contributors · Click any route to synchronize the epoch selection.</div></section>
 <section class="card"><div class="head"><span>Navigation estimates and covariance</span><span>GPS seconds</span></div><div class="controls">
-<label><input type="checkbox" value="position"> Position</label><label><input type="checkbox" value="velocity"> Velocity</label><label><input type="checkbox" value="attitude"> Attitude</label><label><input type="checkbox" value="rms" checked> RMS 1σ</label><label><input type="checkbox" value="attitude_axes_rms" checked> Roll / pitch / heading 1σ</label><label><input type="checkbox" value="gnss_nis" checked> GNSS NIS</label>
+<label><input type="checkbox" value="position"> Position</label><label><input type="checkbox" value="velocity"> Velocity</label><label><input type="checkbox" value="attitude"> Attitude</label><label><input type="checkbox" value="rms" checked> RMS 1σ</label><label><input type="checkbox" value="attitude_axes_rms" checked> Roll / pitch / heading 1σ</label><label><input type="checkbox" value="gnss_nis" checked> GNSS NIS</label><label><input type="checkbox" value="constraint_nis" checked> Constraint NIS</label>
 </div><div id="chart" class="chart"></div><div class="stats" id="stats">Select a sample to inspect aligned GMIS_LC / GMIS_TC / GMIS_LTC values.</div></section></main>
 <script>
 const DATA=__DATA__, MODES=['LC','TC','LTC'], COLORS={LC:'#3867d6',TC:'#e39b29',LTC:'#20a37a'};
 const N=Math.min(...MODES.map(m=>DATA[m].length));let selected=0, chartRows=12, map=null, markers={};
-const fields={position:[['Latitude','lat','deg'],['Longitude','lon','deg'],['Height','h','m']],velocity:[['North velocity','vn','m/s'],['East velocity','ve','m/s'],['Down velocity','vd','m/s']],attitude:[['Roll','roll','deg'],['Pitch','pitch','deg'],['Heading','yaw','deg']],rms:[['Position 3D 1σ','posRms','m'],['Velocity 3D 1σ','velRms','m/s'],['Attitude 3D 1σ','attRms','deg']],attitude_axes_rms:[['Roll 1σ','rollRms','deg'],['Pitch 1σ','pitchRms','deg'],['Heading 1σ','headingRms','deg']],gnss_nis:[['GNSS update NIS','rtkNis','χ²; variable DOF']]};
+const fields={position:[['Latitude','lat','deg'],['Longitude','lon','deg'],['Height','h','m']],velocity:[['North velocity','vn','m/s'],['East velocity','ve','m/s'],['Down velocity','vd','m/s']],attitude:[['Roll','roll','deg'],['Pitch','pitch','deg'],['Heading','yaw','deg']],rms:[['Position 3D 1σ','posRms','m'],['Velocity 3D 1σ','velRms','m/s'],['Attitude 3D 1σ','attRms','deg']],attitude_axes_rms:[['Roll 1σ','rollRms','deg'],['Pitch 1σ','pitchRms','deg'],['Heading 1σ','headingRms','deg']],gnss_nis:[['GNSS update NIS','rtkNis','χ²; variable DOF']],constraint_nis:[['ZUPT NIS','zuptNis','χ²'],['NHC NIS','nhcNis','χ²'],['ZPC NIS','zpcNis','χ²'],['ZHC NIS','zhcNis','χ²']]};
 const chart=document.getElementById('chart'), fallback=document.getElementById('fallback');
 function mapTraces(){const traces=[];for(const m of MODES){const d=DATA[m].slice(0,N);traces.push({type:'scatter',mode:'lines',name:m,x:d.map(p=>p.lon),y:d.map(p=>p.lat),line:{color:COLORS[m],width:2},customdata:d.map((p,i)=>i),hovertemplate:`${m}<br>Lat %{y:.6f}°<br>Lon %{x:.6f}°<extra></extra>`});traces.push({type:'scatter',mode:'markers',name:m+' selected',showlegend:false,x:[d[0].lon],y:[d[0].lat],marker:{color:COLORS[m],size:9,line:{color:'#fff',width:2}},hoverinfo:'skip'});}return traces;}
 function drawFallback(){const all=MODES.flatMap(m=>DATA[m].slice(0,N));const lat=all.map(p=>p.lat),lon=all.map(p=>p.lon);const traces=mapTraces();const layout={autosize:true,margin:{l:55,r:12,t:12,b:42},showlegend:true,legend:{orientation:'h',y:1.08},xaxis:{title:'Longitude (°)',range:[Math.min(...lon)-.0002,Math.max(...lon)+.0002]},yaxis:{title:'Latitude (°)',range:[Math.min(...lat)-.0002,Math.max(...lat)+.0002],scaleanchor:'x',scaleratio:1/Math.cos(lat[0]*Math.PI/180)}};return fallback._fullLayout?Plotly.react(fallback,traces,layout,{responsive:true,displaylogo:false}):Plotly.newPlot(fallback,traces,layout,{responsive:true,displaylogo:false});}
@@ -562,6 +567,31 @@ def page_html_gmis_comparison(datasets: dict[str, list[dict[str, float]]], local
                      "GMIS_LC / GMIS_TC / GMIS_LTC · covariance 1σ · synchronized GNSS epochs")
             .replace("aligned LC / TC / LTC values", "aligned GMIS_LC / GMIS_TC / GMIS_LTC values")
             .replace("RTK P/V update NIS", "GNSS update NIS"))
+
+
+def page_html_gmis_ltc_constraint_comparison(
+    datasets: dict[str, list[dict[str, float]]], local_url: str,
+) -> str:
+    """Show GMIS-LTC before and after ZUPT/NHC/ZPC/ZHC on the shared dashboard."""
+    legacy = {"LC": datasets["Baseline"], "TC": datasets["Constrained"], "LTC": datasets["Baseline"]}
+    html = page_html_comparison(legacy, local_url)
+    old_json = json.dumps(legacy, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+    baseline_name, constrained_name = "LTC baseline", "LTC + ZUPT/NHC + ZPC/ZHC"
+    new_data = {baseline_name: datasets["Baseline"], constrained_name: datasets["Constrained"]}
+    new_json = json.dumps(new_data, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+    old_decl = f"const DATA={old_json}, MODES=['LC','TC','LTC'], COLORS={{LC:'#3867d6',TC:'#e39b29',LTC:'#20a37a'}};"
+    new_decl = (f"const DATA={new_json}, MODES={[baseline_name, constrained_name]!r}, "
+                f"COLORS={{{baseline_name!r}:'#3867d6',{constrained_name!r}:'#20a37a'}};")
+    if old_decl not in html:
+        raise RuntimeError("could not adapt the regression comparison template for GMIS-LTC constraints")
+    return (html.replace(old_decl, new_decl)
+            .replace("DATA.LC", f"DATA[{baseline_name!r}]")
+            .replace("LC / TC / LTC Navigation Regression Explorer", "GMIS-LTC Constraints · Baseline vs Enabled")
+            .replace("LC / TC / LTC Regression Explorer", "GMIS-LTC Constraint Comparison")
+            .replace("Current 18-state replay · covariance 1σ and pre-update innovations",
+                     "GMIS-LTC 42-state lag filter · RTK position + L1 TD-DDCP · constraint diagnostics")
+            .replace("Select a sample to inspect aligned LC / TC / LTC values.",
+                     "Select an epoch to compare GMIS-LTC before and after constraints."))
 
 
 def page_html_constraint_comparison(datasets: dict[str, list[dict[str, float]]]) -> str:
@@ -602,6 +632,10 @@ def main() -> None:
     parser.add_argument("--gmis-lc-csv", type=Path, default=HERE.parents[1] / "output" / "gmis_lc_restored_rtk" / "gmis_lc_solution.csv")
     parser.add_argument("--gmis-ltc-csv", type=Path, default=HERE.parents[1] / "output" / "gmis_ltc" / "gmis_ltc_solution.csv")
     parser.add_argument("--gmis-tc-csv", type=Path, default=HERE.parents[1] / "output" / "gmis_tc" / "gmis_tc_solution.csv")
+    parser.add_argument("--gmis-ltc-constraint-compare", action="store_true", help="compare GMIS-LTC baseline against ZUPT/NHC/ZPC/ZHC")
+    parser.add_argument("--gmis-ltc-weight-compare", action="store_true", help="compare GMIS-LTC solutions with standard and increased RTK position weight")
+    parser.add_argument("--gmis-ltc-baseline-csv", type=Path, default=HERE.parents[1] / "output" / "gmis_ltc" / "gmis_ltc_solution.csv")
+    parser.add_argument("--gmis-ltc-constraints-csv", type=Path, default=HERE.parents[1] / "output" / "gmis_ltc_zupt_nhc" / "gmis_ltc_solution.csv")
     parser.add_argument("--zupt-nhc-compare", action="store_true", help="compare baseline and ZUPT/NHC LC, TC, and LTC solutions")
     parser.add_argument("--lc-baseline-csv", type=Path, default=HERE.parents[1] / "output" / "zupt_nhc_baseline" / "lc" / "ltc_solution.csv")
     parser.add_argument("--tc-baseline-csv", type=Path, default=HERE.parents[1] / "output" / "zupt_nhc_baseline" / "tc" / "ltc_solution.csv")
@@ -624,7 +658,58 @@ def main() -> None:
 
     google_maps_api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
     local_url = f"http://127.0.0.1:{args.port}/index.html"
-    if args.gmis_compare:
+    if args.gmis_ltc_constraint_compare or args.gmis_ltc_weight_compare:
+        paths = {"Baseline": args.gmis_ltc_baseline_csv.resolve(), "Constrained": args.gmis_ltc_constraints_csv.resolve()}
+        raw, totals = {}, {}
+        for mode, path in paths.items():
+            raw[mode], totals[mode] = load_trajectory(path)
+        keyed = {mode: {round(row["t"], 6): row for row in rows} for mode, rows in raw.items()}
+        epochs = sorted(set.intersection(*(set(table) for table in keyed.values())))
+        if not epochs:
+            raise ValueError("GMIS-LTC baseline and constrained runs have no common GPS epochs")
+        datasets = {mode: [keyed[mode][t] for t in epochs] for mode in paths}
+        html = page_html_gmis_ltc_constraint_comparison(datasets, local_url)
+        if args.gmis_ltc_weight_compare:
+            html = (html.replace("GMIS-LTC Constraints · Baseline vs Enabled", "GMIS-LTC · RTK position weight comparison")
+                    .replace("GMIS-LTC Constraint Comparison", "GMIS-LTC RTK Weight Comparison")
+                    .replace("LTC baseline", "LTC constraints · RTK σ 0.5/0.5/1.0 m")
+                    .replace("LTC + ZUPT/NHC + ZPC/ZHC", "LTC constraints · RTK σ 0.1/0.1/0.1 m")
+                    .replace("before and after constraints", "with standard and increased RTK measurement weight"))
+
+        def pct(values: list[float], q: float) -> float:
+            ordered = sorted(values); index=(len(ordered)-1)*q; low=math.floor(index); high=math.ceil(index)
+            return ordered[low] if low==high else ordered[low]*(high-index)+ordered[high]*(index-low)
+        def summarize(mode: str, key: str) -> tuple[float,float,float,float]:
+            vals=[float(row[key]) for row in datasets[mode] if row.get(key) is not None and math.isfinite(float(row[key]))]
+            return math.sqrt(sum(v*v for v in vals)/len(vals)),pct(vals,.5),pct(vals,.95),max(vals)
+        report=["# GMIS-LTC ZUPT/NHC/ZPC/ZHC comparison","",f"Common epochs: {len(epochs):,}; GPS seconds {epochs[0]:.3f}–{epochs[-1]:.3f}.",
+                "All RMS values below are filter covariance-derived formal 1σ statistics, not independent truth errors.","",
+                "| Metric | Baseline RMS / median / P95 / max | Constraints RMS / median / P95 / max | Unit |","|---|---:|---:|---|"]
+        for label,key,unit in (("Position 3D σ","posRms","m"),("Velocity 3D σ","velRms","m/s"),("Attitude 3D σ","attRms","deg"),("GNSS update NIS","rtkNis","χ²; variable DOF")):
+            a,b=summarize("Baseline",key),summarize("Constrained",key)
+            report.append(f"| {label} | " + " / ".join(f"{v:.6g}" for v in a) + " | " + " / ".join(f"{v:.6g}" for v in b) + f" | {unit} |")
+        delta=[]
+        for a,b in zip(datasets["Baseline"],datasets["Constrained"]):
+            lat=math.radians((a["lat"]+b["lat"])*.5);dlon=math.radians(b["lon"]-a["lon"]);dlat=math.radians(b["lat"]-a["lat"])
+            e2=6.69437999014e-3;den=math.sqrt(1-e2*math.sin(lat)**2);rn=6378137.0/den;rm=6378137.0*(1-e2)/(den**3)
+            dn=dlat*(rm+(a["h"]+b["h"])*.5);de=dlon*(rn+(a["h"]+b["h"])*.5)*math.cos(lat);du=b["h"]-a["h"]
+            delta.append(math.sqrt(dn*dn+de*de+du*du))
+        report += ["","| Pairwise solution difference | Median / P95 / max | Unit |","|---|---:|---|",
+                   f"| Baseline vs constrained position | {pct(delta,.5):.6g} / {pct(delta,.95):.6g} / {max(delta):.6g} | m |","",
+                   "Constraint trigger/accept counts are available in the sibling `constraint_innovations.csv`; per-epoch NIS traces are selectable in the interactive dashboard.",""]
+        report_path=paths["Constrained"].parent/"gmis_ltc_zupt_nhc_analysis.md"
+        report_path.write_text("\n".join(report),encoding="utf-8")
+        diagnostics=paths["Constrained"].parent/"constraint_innovations.csv"
+        if diagnostics.exists():
+            counts={}
+            for row in csv.DictReader(diagnostics.open(encoding="utf-8",newline="")):
+                item=counts.setdefault(row["measurement_type"],[0,0]);item[0]+=1;item[1]+=int(row["accepted"]=="1")
+            with report_path.open("a",encoding="utf-8") as f:
+                f.write("\n| Constraint | Triggered | Accepted |\n|---|---:|---:|\n")
+                for name,(count,accepted) in sorted(counts.items()):f.write(f"| {name.upper()} | {count} | {accepted} |\n")
+        print("GMIS-LTC baseline/constrained inputs: "+", ".join(f"{m}={totals[m]:,} rows ({paths[m]})" for m in paths),flush=True)
+        print(f"Common epochs: {len(epochs):,}; report: {report_path}",flush=True)
+    elif args.gmis_compare:
         paths = {"GMIS_LC": args.gmis_lc_csv.resolve(), "GMIS_TC": args.gmis_tc_csv.resolve(),
                  "GMIS_LTC": args.gmis_ltc_csv.resolve()}
         raw, totals = {}, {}
@@ -749,6 +834,8 @@ def main() -> None:
     HTML_PATH.write_text(html, encoding="utf-8")
     if args.gmis_compare:
         print(f"Generated {HTML_PATH} using {len(epochs):,} aligned GMIS epochs", flush=True)
+    elif args.gmis_ltc_constraint_compare or args.gmis_ltc_weight_compare:
+        print(f"Generated {HTML_PATH} using {len(epochs):,} aligned GMIS-LTC epochs", flush=True)
     elif args.zupt_nhc_compare:
         print(f"Generated {HTML_PATH} using {len(epochs):,} common GPS epochs across nine solutions", flush=True)
     elif args.compare:
