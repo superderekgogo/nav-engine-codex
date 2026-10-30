@@ -1,5 +1,6 @@
 #include "nav/gmis/gmis_lc_config.hpp"
 #include "nav/gmis/gmis_lc_estimation.hpp"
+#include "nav/gmis/gmis_vce.hpp"
 #include "navcore/config_loader.hpp"
 
 #include <Eigen/Core>
@@ -167,6 +168,10 @@ int main(int argc, char** argv) {
     const auto json = loader.load(config_path);
     const auto model = nav::gmis::GmisLcConfiguration::fromJson(json);
     const auto& runtime = json.at("runtime");
+    nav::gmis::vce::VceConfig vce_config;
+    if (const auto* vce_json = json.find("vce"))
+      vce_config = nav::gmis::vce::VceConfig::fromJson(*vce_json);
+    nav::gmis::vce::VceEngine vce_engine(vce_config);
     const auto imu_path = resolve(config_path, runtime.at("imu_file").asString());
     const auto rtk_path = resolve(config_path, runtime.at("rtk_solution_file").asString());
     const auto output_path = resolve(config_path, runtime.at("output_file").asString());
@@ -184,6 +189,18 @@ int main(int argc, char** argv) {
     const auto diagnostic_path = output_path.parent_path() / "rtk_update_diagnostics.csv";
     std::ofstream rtk_diagnostic(diagnostic_path);
     if (!rtk_diagnostic) throw std::runtime_error("cannot create RTK diagnostic output: " + diagnostic_path.string());
+    std::ofstream vce_diagnostic;
+    std::filesystem::path vce_diagnostic_path;
+    if (vce_config.enabled) {
+      const auto* configured_vce_path = runtime.find("vce_diagnostics_file");
+      vce_diagnostic_path = configured_vce_path != nullptr
+          ? resolve(config_path, configured_vce_path->asString())
+          : output_path.parent_path() / "vce_diagnostics.csv";
+      std::filesystem::create_directories(vce_diagnostic_path.parent_path());
+      vce_diagnostic.open(vce_diagnostic_path);
+      if (!vce_diagnostic) throw std::runtime_error("cannot create VCE diagnostic output: " + vce_diagnostic_path.string());
+      vce_diagnostic << "gps_seconds,component_id,measurement_model_id,row_count,update_accepted,valid,quadratic_form,redundancy,epoch_variance_factor,window_valid_epochs,window_quadratic_form,window_redundancy,window_variance_factor,smoothed_variance_factor,status,applied_to_R\n";
+    }
     output << "gps_seconds,latitude_deg,longitude_deg,height_m,north_m,east_m,down_m,vn_mps,ve_mps,vd_mps,roll_rad,pitch_rad,heading_rad,"
               "rms_n_m,rms_e_m,rms_d_m,rms_vn_mps,rms_ve_mps,rms_vd_mps,rms_roll_rad,rms_pitch_rad,rms_heading_rad,"
               "imu_update_accepted,imu_nis,rtk_update_accepted,rtk_nis,rtk_status\n";
@@ -216,6 +233,24 @@ int main(int argc, char** argv) {
       ++outputs;
     };
 
+    const auto logVce = [&](double time, const std::string& component_id,
+                            const std::string& measurement_model_id,
+                            const nav::core::EstimatorUpdateResult& update,
+                            const Eigen::VectorXd& residual,
+                            const Eigen::MatrixXd& cofactor,
+                            const Eigen::MatrixXd& residual_covariance) {
+      if (!vce_config.enabled) return;
+      const auto d = vce_engine.observe(time, component_id, residual, cofactor,
+                                        residual_covariance, update.accepted);
+      vce_diagnostic << std::setprecision(12) << time << ',' << component_id << ','
+                     << measurement_model_id << ',' << residual.size() << ','
+                     << (update.accepted ? 1 : 0) << ',' << (d.sample_valid ? 1 : 0) << ','
+                     << d.quadratic_form << ',' << d.redundancy << ',' << d.epoch_variance_factor << ','
+                     << d.valid_epochs << ',' << d.window_quadratic_form << ',' << d.window_redundancy << ','
+                     << d.window_variance_factor << ',' << d.smoothed_variance_factor << ','
+                     << d.status << ",0\n";
+    };
+
     const auto applyRtk = [&](const RtkRow& row) {
       const Eigen::Vector3d measured_position = toNed(row.position_ecef, model.origin);
       const Eigen::Vector3d measured_velocity = ecefVectorToNed(row.velocity_ecef, model.origin);
@@ -242,6 +277,18 @@ int main(int argc, char** argv) {
           innovation_covariance.ldlt().solve(Eigen::MatrixXd::Identity(6, 6));
 
       const auto update = session.updateRtk(row.time, measured_position, measured_velocity, measurement_noise);
+      if (update.accepted && update.posterior_residual.size() == 6 &&
+          update.posterior_residual_covariance.rows() == 6) {
+        logVce(row.time, "rtk_position", "rtk_position_velocity_loose_v1", update,
+               update.posterior_residual.head<3>(), measurement_noise.topLeftCorner<3, 3>(),
+               update.posterior_residual_covariance.topLeftCorner<3, 3>());
+        const bool velocity_valid = (row.valid_components & 0x38) == 0x38 &&
+                                    (row.velocity_variance.array() < 10.0).all();
+        if (velocity_valid)
+          logVce(row.time, "rtk_velocity", "rtk_position_velocity_loose_v1", update,
+                 update.posterior_residual.tail<3>(), measurement_noise.bottomRightCorner<3, 3>(),
+                 update.posterior_residual_covariance.bottomRightCorner<3, 3>());
+      }
       const Eigen::Vector3d posterior_position = session.state().segment<3>(nav::gmis::StateIndex::position);
       const Eigen::Vector3d correction = posterior_position - predicted_state.segment<3>(nav::gmis::StateIndex::position);
       const Eigen::Vector3d post_residual = measured_position - posterior_position;
@@ -282,6 +329,15 @@ int main(int argc, char** argv) {
       const auto result = session.updateImu(sample);
       imu_accepted = result.accepted;
       last_imu_nis = result.nis;
+      if (result.accepted && result.posterior_residual.size() == 6 &&
+          result.posterior_residual_covariance.rows() == 6) {
+        logVce(sample.time_seconds, "imu_gyro", "imu_raw_gyro_accel_v1", result,
+               result.posterior_residual.head<3>(), model.imu_measurement_covariance.topLeftCorner<3, 3>(),
+               result.posterior_residual_covariance.topLeftCorner<3, 3>());
+        logVce(sample.time_seconds, "imu_accel", "imu_raw_gyro_accel_v1", result,
+               result.posterior_residual.tail<3>(), model.imu_measurement_covariance.bottomRightCorner<3, 3>(),
+               result.posterior_residual_covariance.bottomRightCorner<3, 3>());
+      }
       if (sample.time_seconds + 1e-9 >= next_output_time) {
         emit(sample.time_seconds, "GMIS_LC");
         do { next_output_time += 1.0; }
@@ -300,6 +356,7 @@ int main(int argc, char** argv) {
               << "  IMU: " << imu.size() << " samples\n"
               << "  RTK: " << rtk.size() << " solutions\n"
               << "  RTK diagnostics: " << diagnostic_path.string() << "\n"
+              << (vce_config.enabled ? "  VCE diagnostics: " + vce_diagnostic_path.string() + "\n" : "")
               << "  Output: " << output_path.string() << "\n"
               << "  Initial roll/pitch/heading are configuration seeds; this is a pipeline replay, not an accuracy validation.\n";
     return 0;

@@ -97,6 +97,7 @@ EstimatorUpdateResult StateEstimator::update(const Eigen::VectorXd& innovation,
   }
 
   const Eigen::MatrixXd gain = covariance_ * observation_jacobian.transpose() * factor.solve(Eigen::MatrixXd::Identity(m, m));
+  const Eigen::VectorXd posterior_residual = observation_jacobian * (gain * innovation) - innovation;
   state_ += gain * innovation;
   const Eigen::MatrixXd identity = Eigen::MatrixXd::Identity(n, n);
   const Eigen::MatrixXd ikh = identity - gain * observation_jacobian;
@@ -105,6 +106,12 @@ EstimatorUpdateResult StateEstimator::update(const Eigen::VectorXd& innovation,
   requireFinite(state_, "updated state");
   requireFinite(covariance_, "updated covariance");
   result.accepted = true;
+  result.posterior_residual = posterior_residual;
+  result.posterior_residual_covariance = r - observation_jacobian * covariance_ * observation_jacobian.transpose();
+  result.posterior_residual_covariance = 0.5 * (result.posterior_residual_covariance +
+                                                 result.posterior_residual_covariance.transpose());
+  requireFinite(result.posterior_residual, "posterior observation residual");
+  requireFinite(result.posterior_residual_covariance, "posterior residual covariance");
   return result;
 }
 

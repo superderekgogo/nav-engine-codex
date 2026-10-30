@@ -20,6 +20,11 @@ struct EstimatorUpdateResult {
   Eigen::VectorXd normalized_innovation;
   Eigen::MatrixXd innovation_covariance;
   double nis = 0.0;
+  // Linearized posterior observation residual and its covariance. These are
+  // generic diagnostics for callers such as GMIS VCE; they do not alter the
+  // state update and remain empty when an update is rejected.
+  Eigen::VectorXd posterior_residual;
+  Eigen::MatrixXd posterior_residual_covariance;
 };
 
 class StateEstimator {

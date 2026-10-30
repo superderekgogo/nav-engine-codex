@@ -86,6 +86,7 @@ add_library(nav_gmis STATIC
   src/gmis/gmis_lc_config.cpp
   src/gmis/gmis_lc_models.cpp
   src/gmis/gmis_lc_estimation.cpp
+  src/gmis/gmis_vce.cpp
   src/gmis/gmis_ltc_estimation.cpp
   src/gmis/gmis_ltc_constraints.cpp
   src/gmis/gmis_tc_estimation.cpp
